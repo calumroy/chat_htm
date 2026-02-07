@@ -1,0 +1,55 @@
+# Small Text HTM Configuration
+# Single-layer network with 10x10 input (100-bit SDR).
+# Designed for quick testing and iteration.
+
+# --- Text / Encoder settings (chat_htm-specific) ---
+text:
+  mode: character
+
+encoder:
+  active_bits: 9               # ~9% sparsity in the 100-bit SDR
+  min_value: 0
+  max_value: 127
+
+# --- HTM Region settings (standard htm_flow format) ---
+enable_feedback: false
+
+layers:
+  # Layer 0 - Single small layer
+  - name: Layer0_SmallText
+    input:
+      rows: 10
+      cols: 10                 # 10*10 = 100 total input bits
+    columns:
+      rows: 10
+      cols: 20
+    overlap:
+      pot_width: 10
+      pot_height: 1
+      center_pot_synapses: true
+      connected_perm: 0.3
+      min_overlap: 2
+      min_potential_overlap: 1
+      wrap_input: true
+    inhibition:
+      width: 20
+      height: 1
+      desired_local_activity: 1
+      strict_local_activity: false
+    spatial_learning:
+      permanence_inc: 0.1
+      permanence_dec: 0.05
+      active_col_permanence_dec: 0.05
+    sequence_memory:
+      cells_per_column: 4
+      max_segments_per_cell: 3
+      max_synapses_per_segment: 15
+      min_num_syn_threshold: 3
+      new_syn_permanence: 0.3
+      connect_permanence: 0.2
+      activation_threshold: 4
+      permanence_inc: 0.1
+      permanence_dec: 0.05
+    temporal_pooling:
+      enabled: false
+      delay_length: 1
