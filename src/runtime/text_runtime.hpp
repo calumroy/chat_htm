@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -60,16 +61,27 @@ public:
   /// The character that was most recently fed to the network.
   char last_char() const { return last_char_; }
 
+  /// Enable/disable per-step text input logging.
+  /// When enabled, each step() prints the current text context to stdout.
+  void set_log_text(bool enabled) { log_text_ = enabled; }
+  bool log_text() const { return log_text_; }
+
   /// Cumulative prediction accuracy (fraction of steps where the HTM
   /// predicted the correct next column activation pattern).
   double prediction_accuracy() const;
 
 private:
+  /// Print a readable character (replace control chars with spaces/dots).
+  static char printable(char c);
+  /// Build a context string showing surrounding text with current char highlighted.
+  std::string text_context() const;
+
   std::unique_ptr<htm_flow::HTMRegion> region_;
   std::unique_ptr<TextChunker> chunker_;
   ScalarEncoder encoder_;
   std::string name_;
   int active_layer_idx_{0};
+  bool log_text_{false};
 
   char last_char_{'\0'};
   int correct_predictions_{0};

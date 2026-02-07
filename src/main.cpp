@@ -172,6 +172,11 @@ int main(int argc, char* argv[]) {
   std::string name = std::filesystem::path(config_file).stem().string();
   chat_htm::TextRuntime runtime(region_cfg, std::move(chunker), encoder, name);
 
+  // Enable per-step text logging (works in both GUI and headless modes)
+  if (log) {
+    runtime.set_log_text(true);
+  }
+
   // --- GUI mode ---
   if (use_gui) {
 #ifdef HTM_FLOW_WITH_GUI
@@ -179,21 +184,59 @@ int main(int argc, char* argv[]) {
     return htm_gui::run_debugger(argc, argv, runtime);
 #else
     std::cerr << "This binary was built without GUI support.\n"
-              << "Rebuild with: -DHTM_FLOW_WITH_GUI=ON\n";
+              << "Use the container-based GUI instead (no local Qt6 needed):\n"
+              << "  ./run_gui.sh --input " << input_file
+              << " --config " << config_file << "\n"
+              << "\n"
+              << "Or rebuild natively with Qt6 installed:\n"
+              << "  ./build.sh Release GUI\n";
     return 2;
 #endif
   }
 
   // --- Headless mode ---
+  auto printable = [](char c) -> char {
+    if (c == '\n') return ' ';
+    if (c == '\r') return ' ';
+    if (c == '\t') return ' ';
+    if (c < 32 || c > 126) return '.';
+    return c;
+  };
+
+  // Build a short context window showing where in the text the HTM is.
+  // Format: "...ello [w]orld..."  where [w] is the current character.
+  auto text_context = [&]() -> std::string {
+    const auto& tc = runtime.chunker();
+    const auto& text = tc.text();
+    auto pos = tc.position();
+    // position() is already advanced past the char we just read,
+    // so the char we just fed is at pos-1 (wrapping).
+    std::size_t cur = (pos == 0) ? text.size() - 1 : pos - 1;
+    const int ctx = 8;  // chars of context each side
+    std::string result;
+    for (int j = -ctx; j <= ctx; ++j) {
+      std::size_t idx = (cur + text.size() + static_cast<std::size_t>(j)) % text.size();
+      char c = printable(text[idx]);
+      if (j == 0) {
+        result += '[';
+        result += c;
+        result += ']';
+      } else {
+        result += c;
+      }
+    }
+    return result;
+  };
+
   int log_interval = std::max(1, total_steps / 20);  // Log ~20 times
   for (int i = 0; i < total_steps; ++i) {
     runtime.step(1);
 
     if (log && (i % log_interval == 0 || i == total_steps - 1)) {
       std::cout << "Step " << (i + 1) << "/" << total_steps
-                << "  char='" << runtime.last_char() << "'"
                 << "  epoch=" << runtime.chunker().epoch()
                 << "  accuracy=" << (runtime.prediction_accuracy() * 100.0) << "%"
+                << "  | " << text_context()
                 << "\n";
     }
   }

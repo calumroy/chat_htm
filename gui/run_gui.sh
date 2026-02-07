@@ -43,14 +43,16 @@ IMAGE_NAME=${IMAGE_NAME:-chat_htm_gui:qt6}
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
-# Check image exists
+# Auto-build the image if it doesn't exist yet
 if ! podman image exists "$IMAGE_NAME" 2>/dev/null; then
-  echo "Image '$IMAGE_NAME' not found. Build it first:" >&2
-  echo "  ./gui/build_image.sh" >&2
-  echo "" >&2
-  echo "Or reuse htm_flow's image if you already have it:" >&2
-  echo "  IMAGE_NAME=htm_flow_gui:qt6 ./gui/run_gui.sh $*" >&2
-  exit 1
+  # Also check if htm_flow's image exists and reuse it
+  if podman image exists "htm_flow_gui:qt6" 2>/dev/null; then
+    echo "Reusing existing htm_flow_gui:qt6 image."
+    IMAGE_NAME="htm_flow_gui:qt6"
+  else
+    echo "Container image not found. Building '$IMAGE_NAME' (first time only)..."
+    "$SCRIPT_DIR/build_image.sh"
+  fi
 fi
 
 UID_NUM=$(id -u)

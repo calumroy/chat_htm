@@ -1,6 +1,8 @@
 #include "runtime/text_runtime.hpp"
 
 #include <algorithm>
+#include <iomanip>
+#include <iostream>
 #include <stdexcept>
 
 namespace chat_htm {
@@ -65,6 +67,16 @@ void TextRuntime::step(int n) {
     auto sdr = encoder_.encode(char_val);
     region_->set_input(sdr);
     region_->step(1);
+
+    // Log text context after each step if enabled.
+    if (log_text_) {
+      std::cout << "[text] step=" << region_->timestep()
+                << "  epoch=" << chunker_->epoch()
+                << "  accuracy=" << std::fixed << std::setprecision(1)
+                << (prediction_accuracy() * 100.0) << "%"
+                << "  | " << text_context()
+                << std::endl;
+    }
   }
 }
 
@@ -129,6 +141,34 @@ void TextRuntime::set_active_layer(int idx) {
 double TextRuntime::prediction_accuracy() const {
   if (total_predictions_ == 0) return 0.0;
   return static_cast<double>(correct_predictions_) / total_predictions_;
+}
+
+char TextRuntime::printable(char c) {
+  if (c == '\n' || c == '\r' || c == '\t') return ' ';
+  if (c < 32 || c > 126) return '.';
+  return c;
+}
+
+std::string TextRuntime::text_context() const {
+  const auto& text = chunker_->text();
+  auto pos = chunker_->position();
+  // position() is already advanced past the char we just read,
+  // so the char we just fed is at pos-1 (wrapping).
+  std::size_t cur = (pos == 0) ? text.size() - 1 : pos - 1;
+  const int ctx = 10;  // chars of context each side
+  std::string result;
+  for (int j = -ctx; j <= ctx; ++j) {
+    std::size_t idx = (cur + text.size() + static_cast<std::size_t>(j)) % text.size();
+    char c = printable(text[idx]);
+    if (j == 0) {
+      result += '[';
+      result += c;
+      result += ']';
+    } else {
+      result += c;
+    }
+  }
+  return result;
 }
 
 }  // namespace chat_htm

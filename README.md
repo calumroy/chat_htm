@@ -21,35 +21,32 @@ Or if already cloned:
 git submodule update --init --recursive
 ```
 
-2. Install htm_flow dependencies:
+2. Build:
 ```bash
-cd htm_flow && ./setup.sh && cd ..
+./build.sh
 ```
 
-3. Build:
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-```
+That handles dependencies, cmake, and compilation in one step. See `./build.sh -h` for options (e.g. `./build.sh Debug`, `./build.sh Release GUI`).
 
 ## Usage
 
+All examples assume you are in the project root (not `build/`).
+
 ```bash
 # Feed a text file to the HTM network
-./chat_htm --input path/to/text.txt --config ../configs/small_text.yaml
+./build/chat_htm --input tests/test_data/hello_world.txt --config configs/small_text.yaml
 
-# With logging to see progress
-./chat_htm --input path/to/text.txt --config ../configs/default_text.yaml --epochs 10 --log
+# With logging to see progress and prediction accuracy
+./build/chat_htm --input tests/test_data/hello_world.txt --config configs/default_text.yaml --epochs 10 --log
 
-# With GUI visualization (requires building with -DHTM_FLOW_WITH_GUI=ON)
-./chat_htm --input path/to/text.txt --config ../configs/default_text.yaml --gui
+# Simple repeating pattern (good for seeing the HTM learn quickly)
+./build/chat_htm --input tests/test_data/simple_patterns.txt --config configs/small_text.yaml --epochs 5 --log
 
 # Process a specific number of steps
-./chat_htm --input path/to/text.txt --config ../configs/small_text.yaml --steps 500
+./build/chat_htm --input tests/test_data/alphabet.txt --config configs/small_text.yaml --steps 500
 
 # List available configs
-./chat_htm --list-configs
+./build/chat_htm --list-configs
 ```
 
 ### CLI Options
@@ -76,40 +73,30 @@ You can create your own configs to experiment with different network sizes, numb
 ## Running Tests
 
 ```bash
-cd build
-ctest --output-on-failure
+cd build && ctest --output-on-failure
 ```
 
-## Building with GUI Support
+## GUI Debugger
 
-The htm_gui Qt6 debugger lets you visualize the HTM network as it processes text -- you can see column activations, cell predictions, and synapses update in real time.
+The htm_gui Qt6 debugger lets you visualize the HTM network as it processes text -- you can watch column activations, cell predictions, and synapses update in real time.
 
-### Option 1: Container-based GUI (recommended, no local Qt6 needed)
-
-Build the container image once, then use `run_gui.sh` to launch:
+**You do not need Qt6 installed.** The GUI runs inside a container (podman). The image is built automatically on first use:
 
 ```bash
-# Build the image (uses podman, only needed once)
-./gui/build_image.sh
+# Launch the GUI (image builds automatically the first time)
+./run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
 
-# Run chat_htm with GUI inside the container
-./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
-./gui/run_gui.sh --input tests/test_data/alphabet.txt --config configs/default_text.yaml --log
-./gui/run_gui.sh --input mydata.txt --config configs/default_text.yaml --epochs 10
+# With logging
+./run_gui.sh --input tests/test_data/alphabet.txt --config configs/default_text.yaml --log
+
+# Your own text file
+./run_gui.sh --input mydata.txt --config configs/default_text.yaml --epochs 10
 ```
 
-If you already built htm_flow's GUI image you can reuse it:
+If you have Qt6 installed locally and prefer a native build:
 ```bash
-IMAGE_NAME=htm_flow_gui:qt6 ./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
-```
-
-### Option 2: Native build (requires Qt6 installed locally)
-
-```bash
-cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release -DHTM_FLOW_WITH_GUI=ON
-make -j$(nproc)
-./chat_htm --input ../tests/test_data/hello_world.txt --config ../configs/default_text.yaml --gui
+./build.sh Release GUI
+./build/chat_htm --input tests/test_data/hello_world.txt --config configs/default_text.yaml --gui
 ```
 
 ## Project Structure
