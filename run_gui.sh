@@ -4,6 +4,7 @@
 #
 # Usage:
 #   ./run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
+#   ./run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml --theme dark
 #   ./run_gui.sh --input tests/test_data/alphabet.txt --config configs/default_text.yaml --log
 #   ./run_gui.sh -h
 #

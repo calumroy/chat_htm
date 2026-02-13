@@ -1,0 +1,57 @@
+# Word-Row Text HTM Configuration
+# One HTM step processes one word.
+# Each row in Layer 0 input represents one character position in the word.
+# Each letter maps to a distinct non-overlapping bit block within that row.
+
+text:
+  mode: word_rows
+
+encoder:
+  # Number of active bits assigned to each letter block.
+  letter_bits: 8
+  # Lowercase alphabet used for deterministic letter-to-block mapping.
+  alphabet: "abcdefghijklmnopqrstuvwxyz"
+
+enable_feedback: false
+
+layers:
+  - name: Layer0_WordRows
+    input:
+      # Max word length in tests/test_data/simple_sentences.txt is 5.
+      rows: 5
+      # cols must be letter_bits * (alphabet_size + unknown_bucket).
+      # 8 * (26 + 1) = 216
+      cols: 216
+    columns:
+      rows: 12
+      cols: 36
+    overlap:
+      pot_width: 32
+      pot_height: 1
+      center_pot_synapses: true
+      connected_perm: 0.3
+      min_overlap: 4
+      min_potential_overlap: 1
+      wrap_input: false
+    inhibition:
+      width: 36
+      height: 1
+      desired_local_activity: 4
+      strict_local_activity: false
+    spatial_learning:
+      permanence_inc: 0.08
+      permanence_dec: 0.04
+      active_col_permanence_dec: 0.04
+    sequence_memory:
+      cells_per_column: 6
+      max_segments_per_cell: 6
+      max_synapses_per_segment: 12
+      min_num_syn_threshold: 4
+      new_syn_permanence: 0.3
+      connect_permanence: 0.2
+      activation_threshold: 6
+      permanence_inc: 0.08
+      permanence_dec: 0.04
+    temporal_pooling:
+      enabled: false
+      delay_length: 1

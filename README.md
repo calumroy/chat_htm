@@ -42,6 +42,9 @@ All examples assume you are in the project root (not `build/`).
 # Simple repeating pattern (good for seeing the HTM learn quickly)
 ./build/chat_htm --input tests/test_data/simple_patterns.txt --config configs/small_text.yaml --epochs 5 --log
 
+# Word-row mode: one word per step, one row per letter position
+./build/chat_htm --input tests/test_data/simple_sentences.txt --config configs/word_rows_text.yaml --epochs 20 --log
+
 # Process a specific number of steps
 ./build/chat_htm --input tests/test_data/alphabet.txt --config configs/small_text.yaml --steps 500
 
@@ -58,6 +61,7 @@ All examples assume you are in the project root (not `build/`).
 | `--steps N` | Number of character steps (default: entire file) |
 | `--epochs N` | Number of passes through the file (default: 1) |
 | `--gui` | Launch the htm_gui visual debugger |
+| `--theme MODE` | GUI theme: `light` or `dark` (overrides YAML `gui.theme`) |
 | `--log` | Print per-step progress and accuracy |
 | `--list-configs` | List YAML configs in `configs/` |
 
@@ -67,6 +71,7 @@ YAML config files in `configs/` control both the text encoding and HTM network p
 
 - **`configs/small_text.yaml`** -- Single-layer, 100-bit SDR. Fast for testing.
 - **`configs/default_text.yaml`** -- Two-layer, 400-bit SDR. Better capacity.
+- **`configs/word_rows_text.yaml`** -- Single-layer word mode. One word per HTM step and one input row per letter position with non-overlapping per-letter bit blocks.
 
 You can create your own configs to experiment with different network sizes, numbers of layers, learning rates, and temporal pooling settings. See the existing configs and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for details on all parameters.
 
@@ -86,8 +91,14 @@ The htm_gui Qt6 debugger lets you visualize the HTM network as it processes text
 # Launch the GUI (image builds automatically the first time)
 ./run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
 
+# Force dark theme from CLI
+./run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml --theme dark
+
 # With logging
 ./run_gui.sh --input tests/test_data/alphabet.txt --config configs/default_text.yaml --log
+
+# Word-row mode in GUI
+./run_gui.sh --input tests/test_data/simple_sentences.txt --config configs/word_rows_text.yaml --epochs 20 --log
 
 # Your own text file
 ./run_gui.sh --input mydata.txt --config configs/default_text.yaml --epochs 10
@@ -97,6 +108,13 @@ If you have Qt6 installed locally and prefer a native build:
 ```bash
 ./build.sh Release GUI
 ./build/chat_htm --input tests/test_data/hello_world.txt --config configs/default_text.yaml --gui
+```
+
+Theme can also be set in YAML and will be used as the default when `--theme` is not provided:
+
+```yaml
+gui:
+  theme: dark
 ```
 
 ## Project Structure

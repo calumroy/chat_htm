@@ -14,9 +14,26 @@ TextRuntime::TextRuntime(const htm_flow::HTMRegionConfig& cfg,
     : region_(std::make_unique<htm_flow::HTMRegion>(cfg, name)),
       chunker_(std::move(chunker)),
       encoder_(encoder),
+      word_encoder_(WordRowEncoder::Params{}),
+      input_mode_(InputMode::Character),
       name_(name) {
   if (!chunker_) {
     throw std::invalid_argument("TextRuntime: chunker must not be null");
+  }
+}
+
+TextRuntime::TextRuntime(const htm_flow::HTMRegionConfig& cfg,
+                         std::unique_ptr<WordChunker> chunker,
+                         const WordRowEncoder& encoder,
+                         const std::string& name)
+    : region_(std::make_unique<htm_flow::HTMRegion>(cfg, name)),
+      word_chunker_(std::move(chunker)),
+      encoder_(ScalarEncoder::Params{}),
+      word_encoder_(encoder),
+      input_mode_(InputMode::WordRows),
+      name_(name) {
+  if (!word_chunker_) {
+    throw std::invalid_argument("TextRuntime: word chunker must not be null");
   }
 }
 
@@ -28,19 +45,12 @@ htm_gui::Snapshot TextRuntime::snapshot() const {
 }
 
 void TextRuntime::step(int n) {
-  if (!region_ || !chunker_ || n <= 0) return;
+  if (!region_ || n <= 0) return;
+  if (input_mode_ == InputMode::Character && !chunker_) return;
+  if (input_mode_ == InputMode::WordRows && !word_chunker_) return;
 
   for (int i = 0; i < n; ++i) {
-    // Check prediction BEFORE advancing: did the network predict this input?
-    // We only track after the first step (need a prior prediction to compare).
     if (total_predictions_ > 0 || region_->timestep() > 0) {
-      // Get the current character that is about to be fed.
-      int char_val = chunker_->peek();
-      auto expected_sdr = encoder_.encode(char_val);
-
-      // Check if the bottom layer predicted any of the active columns.
-      // A simple metric: count how many of the expected active input bits
-      // were in columns that had predictive cells.
       const auto& layer0 = region_->layer(0);
       auto snap = layer0.snapshot();
       if (!snap.column_cell_masks.empty()) {
@@ -61,20 +71,27 @@ void TextRuntime::step(int n) {
       }
     }
 
-    // Read next character, encode, feed to region.
-    int char_val = chunker_->next();
-    last_char_ = static_cast<char>(char_val);
-    auto sdr = encoder_.encode(char_val);
+    std::vector<int> sdr;
+    if (input_mode_ == InputMode::Character) {
+      if (!chunker_) return;
+      int char_val = chunker_->next();
+      last_char_ = static_cast<char>(char_val);
+      sdr = encoder_.encode(char_val);
+    } else {
+      if (!word_chunker_) return;
+      last_word_ = word_chunker_->next();
+      sdr = word_encoder_.encode(last_word_);
+    }
     region_->set_input(sdr);
     region_->step(1);
 
     // Log text context after each step if enabled.
     if (log_text_) {
       std::cout << "[text] step=" << region_->timestep()
-                << "  epoch=" << chunker_->epoch()
+                << "  epoch=" << input_epoch()
                 << "  accuracy=" << std::fixed << std::setprecision(1)
                 << (prediction_accuracy() * 100.0) << "%"
-                << "  | " << text_context()
+                << "  | " << input_context()
                 << std::endl;
     }
   }
@@ -103,7 +120,13 @@ htm_gui::DistalSynapseQuery TextRuntime::query_distal(int column_x, int column_y
 }
 
 std::vector<htm_gui::InputSequence> TextRuntime::input_sequences() const {
-  return {{0, "Text: " + chunker_->path()}};
+  if (input_mode_ == InputMode::Character && chunker_) {
+    return {{0, "Text: " + chunker_->path()}};
+  }
+  if (word_chunker_) {
+    return {{0, "Text: " + word_chunker_->path()}};
+  }
+  return {{0, "Text: <unknown>"}};
 }
 
 int TextRuntime::activation_threshold() const {
@@ -143,6 +166,30 @@ double TextRuntime::prediction_accuracy() const {
   return static_cast<double>(correct_predictions_) / total_predictions_;
 }
 
+std::size_t TextRuntime::input_size() const {
+  if (input_mode_ == InputMode::Character && chunker_) return chunker_->size();
+  if (word_chunker_) return word_chunker_->size();
+  return 0;
+}
+
+int TextRuntime::input_epoch() const {
+  if (input_mode_ == InputMode::Character && chunker_) return chunker_->epoch();
+  if (word_chunker_) return word_chunker_->epoch();
+  return 0;
+}
+
+std::size_t TextRuntime::input_total_steps() const {
+  if (input_mode_ == InputMode::Character && chunker_) return chunker_->total_steps();
+  if (word_chunker_) return word_chunker_->total_steps();
+  return 0;
+}
+
+std::string TextRuntime::input_context() const {
+  if (input_mode_ == InputMode::Character && chunker_) return text_context();
+  if (word_chunker_) return word_context();
+  return {};
+}
+
 char TextRuntime::printable(char c) {
   if (c == '\n' || c == '\r' || c == '\t') return ' ';
   if (c < 32 || c > 126) return '.';
@@ -150,6 +197,7 @@ char TextRuntime::printable(char c) {
 }
 
 std::string TextRuntime::text_context() const {
+  if (!chunker_ || chunker_->text().empty()) return {};
   const auto& text = chunker_->text();
   auto pos = chunker_->position();
   // position() is already advanced past the char we just read,
@@ -167,6 +215,28 @@ std::string TextRuntime::text_context() const {
     } else {
       result += c;
     }
+  }
+  return result;
+}
+
+std::string TextRuntime::word_context() const {
+  if (!word_chunker_ || word_chunker_->words().empty()) return {};
+  const auto& words = word_chunker_->words();
+  auto pos = word_chunker_->position();
+  std::size_t cur = (pos == 0) ? words.size() - 1 : pos - 1;
+  const int ctx = 4;
+  std::string result;
+  for (int j = -ctx; j <= ctx; ++j) {
+    std::size_t idx = (cur + words.size() + static_cast<std::size_t>(j)) % words.size();
+    const std::string& w = words[idx];
+    if (j == 0) {
+      result += "[";
+      result += w;
+      result += "]";
+    } else {
+      result += w;
+    }
+    if (j < ctx) result += " ";
   }
   return result;
 }

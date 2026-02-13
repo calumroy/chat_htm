@@ -6,12 +6,16 @@
 #include <htm_flow/config_loader.hpp>
 
 #include "encoders/scalar_encoder.hpp"
+#include "encoders/word_row_encoder.hpp"
 #include "runtime/text_runtime.hpp"
 #include "text/text_chunker.hpp"
+#include "text/word_chunker.hpp"
 
 using chat_htm::ScalarEncoder;
 using chat_htm::TextChunker;
 using chat_htm::TextRuntime;
+using chat_htm::WordChunker;
+using chat_htm::WordRowEncoder;
 
 namespace {
 
@@ -163,4 +167,35 @@ TEST(TextHTMIntegration, LoadFromYAML) {
       TextChunker::from_string("test"));
   TextRuntime rt(cfg, std::move(chunker), enc, "yaml_test");
   rt.step(10);
+}
+
+TEST(TextHTMIntegration, WordRowsModeLearnsSimpleSentenceSequence) {
+  // For the word-row encoder:
+  // rows = max word length, cols = letter_bits * (alphabet_size + unknown_bucket)
+  int rows = 5;
+  int cols = 108;  // 4 * (26 + 1)
+  auto cfg = make_test_config(rows, cols);
+
+  WordRowEncoder::Params ep;
+  ep.rows = rows;
+  ep.cols = cols;
+  ep.letter_bits = 4;
+  ep.alphabet = "abcdefghijklmnopqrstuvwxyz";
+  WordRowEncoder enc(ep);
+
+  auto chunker = std::make_unique<WordChunker>(
+      WordChunker::from_string("small cat likes warm milk small dog likes warm soup "));
+  TextRuntime rt(cfg, std::move(chunker), enc, "word_rows");
+
+  rt.step(600);
+  auto snap = rt.region().layer(0).snapshot();
+  int predictive_cells = 0;
+  for (const auto& masks : snap.column_cell_masks) {
+    predictive_cells += (masks.predictive != 0) ? 1 : 0;
+  }
+
+  EXPECT_EQ(rt.num_layers(), 1);
+  EXPECT_EQ(rt.word_chunker().total_steps(), 600u);
+  EXPECT_GT(snap.active_column_indices.size(), 0u);
+  EXPECT_GT(predictive_cells, 0);
 }

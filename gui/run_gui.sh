@@ -3,6 +3,7 @@
 #
 # Usage:
 #   ./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
+#   ./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml --theme dark
 #   ./gui/run_gui.sh --input myfile.txt --config configs/default_text.yaml --log
 #   ./gui/run_gui.sh --help
 #
@@ -24,9 +25,11 @@ Usage: ./gui/run_gui.sh [chat_htm options]
 
 All arguments are forwarded to the chat_htm binary (--gui is added automatically).
 Paths to --input and --config should be relative to the chat_htm project root.
+Theme can be selected with --theme light|dark (or YAML gui.theme in the config file).
 
 Examples:
   ./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml
+  ./gui/run_gui.sh --input tests/test_data/hello_world.txt --config configs/small_text.yaml --theme dark
   ./gui/run_gui.sh --input tests/test_data/alphabet.txt --config configs/default_text.yaml --log
   ./gui/run_gui.sh --input mydata.txt --config configs/default_text.yaml --epochs 10
 

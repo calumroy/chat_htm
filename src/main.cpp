@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -9,14 +10,21 @@
 #include <htm_flow/config_loader.hpp>
 
 #include "encoders/scalar_encoder.hpp"
+#include "encoders/word_row_encoder.hpp"
 #include "runtime/text_runtime.hpp"
 #include "text/text_chunker.hpp"
+#include "text/word_chunker.hpp"
 
 #ifdef HTM_FLOW_WITH_GUI
 #include <htm_gui/debugger.hpp>
 #endif
 
 namespace {
+
+enum class TextMode {
+  Character,
+  WordRows
+};
 
 void usage(const char* prog) {
   std::cerr
@@ -26,9 +34,10 @@ void usage(const char* prog) {
       << "  --input  FILE   Path to a text file to feed to the HTM network\n"
       << "  --config FILE   Path to a YAML config file (see configs/)\n\n"
       << "Options:\n"
-      << "  --steps  N      Number of character steps to process (default: whole file)\n"
+      << "  --steps  N      Number of input steps to process (default: whole file/word list)\n"
       << "  --epochs N      Number of passes through the text file (default: 1)\n"
       << "  --gui           Launch the htm_gui debugger for visualization\n"
+      << "  --theme MODE    GUI theme: light|dark (CLI overrides YAML gui.theme)\n"
       << "  --log           Print per-step logging (character, epoch, accuracy)\n"
       << "  --list-configs  List available YAML configs in configs/\n"
       << "  -h, --help      Show this help message\n\n"
@@ -40,8 +49,33 @@ void usage(const char* prog) {
 
 /// Parse the text/encoder sections from the YAML config.
 /// These are chat_htm-specific keys that htm_flow's loader silently ignores.
-chat_htm::ScalarEncoder::Params parse_encoder_params(const std::string& config_path,
-                                                      int layer0_input_bits) {
+TextMode parse_text_mode(const std::string& config_path) {
+  try {
+    YAML::Node root = YAML::LoadFile(config_path);
+    if (root["text"] && root["text"]["mode"]) {
+      const std::string mode = root["text"]["mode"].as<std::string>();
+      if (mode == "word_rows") return TextMode::WordRows;
+    }
+  } catch (const YAML::Exception& e) {
+    std::cerr << "Warning: could not parse text mode: " << e.what() << "\n";
+  }
+  return TextMode::Character;
+}
+
+std::string parse_gui_theme(const std::string& config_path) {
+  try {
+    YAML::Node root = YAML::LoadFile(config_path);
+    if (root["gui"] && root["gui"]["theme"]) {
+      return root["gui"]["theme"].as<std::string>();
+    }
+  } catch (const YAML::Exception& e) {
+    std::cerr << "Warning: could not parse gui theme: " << e.what() << "\n";
+  }
+  return {};
+}
+
+chat_htm::ScalarEncoder::Params parse_scalar_encoder_params(const std::string& config_path,
+                                                            int layer0_input_bits) {
   chat_htm::ScalarEncoder::Params p;
   p.n = layer0_input_bits;  // must match Layer 0 input size
 
@@ -60,6 +94,24 @@ chat_htm::ScalarEncoder::Params parse_encoder_params(const std::string& config_p
   return p;
 }
 
+chat_htm::WordRowEncoder::Params parse_word_row_encoder_params(const std::string& config_path,
+                                                               int input_rows, int input_cols) {
+  chat_htm::WordRowEncoder::Params p;
+  p.rows = input_rows;
+  p.cols = input_cols;
+  try {
+    YAML::Node root = YAML::LoadFile(config_path);
+    if (root["encoder"]) {
+      const auto& enc = root["encoder"];
+      if (enc["letter_bits"]) p.letter_bits = enc["letter_bits"].as<int>();
+      if (enc["alphabet"]) p.alphabet = enc["alphabet"].as<std::string>();
+    }
+  } catch (const YAML::Exception& e) {
+    std::cerr << "Warning: could not parse word-row encoder section: " << e.what() << "\n";
+  }
+  return p;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -69,6 +121,7 @@ int main(int argc, char* argv[]) {
   int epochs = 1;
   bool use_gui = false;
   bool log = false;
+  std::string cli_theme;
 
   // --- Parse arguments ---
   for (int i = 1; i < argc; ++i) {
@@ -109,6 +162,11 @@ int main(int argc, char* argv[]) {
       epochs = std::atoi(argv[++i]);
       continue;
     }
+    if (arg == "--theme") {
+      if (i + 1 >= argc) { std::cerr << "--theme requires a value: light|dark\n"; return 2; }
+      cli_theme = argv[++i];
+      continue;
+    }
     if (arg == "--gui") { use_gui = true; continue; }
     if (arg == "--log") { log = true; continue; }
 
@@ -138,50 +196,66 @@ int main(int argc, char* argv[]) {
   }
 
   // Compute Layer 0 input size
-  int input_bits = region_cfg.layers[0].num_input_rows * region_cfg.layers[0].num_input_cols;
-
-  // Parse encoder parameters
-  auto enc_params = parse_encoder_params(config_file, input_bits);
+  const int input_rows = region_cfg.layers[0].num_input_rows;
+  const int input_cols = region_cfg.layers[0].num_input_cols;
+  const int input_bits = input_rows * input_cols;
+  const TextMode text_mode = parse_text_mode(config_file);
+  const std::string yaml_theme = parse_gui_theme(config_file);
+  const std::string effective_theme = cli_theme.empty() ? yaml_theme : cli_theme;
 
   std::cout << "Config:  " << config_file << " (" << region_cfg.layers.size() << " layer"
             << (region_cfg.layers.size() > 1 ? "s" : "") << ")\n";
   std::cout << "Input:   " << input_file << "\n";
-  std::cout << "Encoder: n=" << enc_params.n << " w=" << enc_params.w
-            << " range=[" << enc_params.min_val << "," << enc_params.max_val << "]\n";
-
-  // --- Create encoder and text chunker ---
-  chat_htm::ScalarEncoder encoder(enc_params);
-
-  std::unique_ptr<chat_htm::TextChunker> chunker;
+  std::unique_ptr<chat_htm::TextRuntime> runtime;
+  std::string name = std::filesystem::path(config_file).stem().string();
   try {
-    chunker = std::make_unique<chat_htm::TextChunker>(input_file);
+    if (text_mode == TextMode::WordRows) {
+      auto enc_params = parse_word_row_encoder_params(config_file, input_rows, input_cols);
+      chat_htm::WordRowEncoder encoder(enc_params);
+      auto chunker = std::make_unique<chat_htm::WordChunker>(input_file);
+      runtime = std::make_unique<chat_htm::TextRuntime>(
+          region_cfg, std::move(chunker), encoder, name);
+      std::cout << "Mode:    word_rows\n";
+      std::cout << "Encoder: rows=" << enc_params.rows
+                << " cols=" << enc_params.cols
+                << " letter_bits=" << enc_params.letter_bits
+                << " alphabet_size=" << enc_params.alphabet.size() << "\n";
+      std::cout << "Text:    " << runtime->input_size() << " words\n\n";
+    } else {
+      auto enc_params = parse_scalar_encoder_params(config_file, input_bits);
+      chat_htm::ScalarEncoder encoder(enc_params);
+      auto chunker = std::make_unique<chat_htm::TextChunker>(input_file);
+      runtime = std::make_unique<chat_htm::TextRuntime>(
+          region_cfg, std::move(chunker), encoder, name);
+      std::cout << "Mode:    character\n";
+      std::cout << "Encoder: n=" << enc_params.n << " w=" << enc_params.w
+                << " range=[" << enc_params.min_val << "," << enc_params.max_val << "]\n";
+      std::cout << "Text:    " << runtime->input_size() << " characters\n\n";
+    }
   } catch (const std::exception& e) {
-    std::cerr << "Error loading text file: " << e.what() << "\n";
+    std::cerr << "Error creating runtime: " << e.what() << "\n";
     return 1;
   }
-
-  std::cout << "Text:    " << chunker->size() << " characters\n\n";
 
   // Compute total steps
   int total_steps = steps;
   if (total_steps < 0) {
-    total_steps = static_cast<int>(chunker->size()) * epochs;
+    total_steps = static_cast<int>(runtime->input_size()) * epochs;
   }
-
-  // --- Create runtime ---
-  std::string name = std::filesystem::path(config_file).stem().string();
-  chat_htm::TextRuntime runtime(region_cfg, std::move(chunker), encoder, name);
 
   // Enable per-step text logging (works in both GUI and headless modes)
   if (log) {
-    runtime.set_log_text(true);
+    runtime->set_log_text(true);
   }
 
   // --- GUI mode ---
   if (use_gui) {
 #ifdef HTM_FLOW_WITH_GUI
     std::cout << "Launching GUI debugger...\n";
-    return htm_gui::run_debugger(argc, argv, runtime);
+    htm_gui::DebuggerOptions opts;
+    opts.window_title = name;
+    opts.theme = effective_theme;
+    return htm_gui::run_debugger(argc, argv, *runtime, opts);
 #else
     std::cerr << "This binary was built without GUI support.\n"
               << "Use the container-based GUI instead (no local Qt6 needed):\n"
@@ -195,55 +269,22 @@ int main(int argc, char* argv[]) {
   }
 
   // --- Headless mode ---
-  auto printable = [](char c) -> char {
-    if (c == '\n') return ' ';
-    if (c == '\r') return ' ';
-    if (c == '\t') return ' ';
-    if (c < 32 || c > 126) return '.';
-    return c;
-  };
-
-  // Build a short context window showing where in the text the HTM is.
-  // Format: "...ello [w]orld..."  where [w] is the current character.
-  auto text_context = [&]() -> std::string {
-    const auto& tc = runtime.chunker();
-    const auto& text = tc.text();
-    auto pos = tc.position();
-    // position() is already advanced past the char we just read,
-    // so the char we just fed is at pos-1 (wrapping).
-    std::size_t cur = (pos == 0) ? text.size() - 1 : pos - 1;
-    const int ctx = 8;  // chars of context each side
-    std::string result;
-    for (int j = -ctx; j <= ctx; ++j) {
-      std::size_t idx = (cur + text.size() + static_cast<std::size_t>(j)) % text.size();
-      char c = printable(text[idx]);
-      if (j == 0) {
-        result += '[';
-        result += c;
-        result += ']';
-      } else {
-        result += c;
-      }
-    }
-    return result;
-  };
-
   int log_interval = std::max(1, total_steps / 20);  // Log ~20 times
   for (int i = 0; i < total_steps; ++i) {
-    runtime.step(1);
+    runtime->step(1);
 
     if (log && (i % log_interval == 0 || i == total_steps - 1)) {
       std::cout << "Step " << (i + 1) << "/" << total_steps
-                << "  epoch=" << runtime.chunker().epoch()
-                << "  accuracy=" << (runtime.prediction_accuracy() * 100.0) << "%"
-                << "  | " << text_context()
+                << "  epoch=" << runtime->input_epoch()
+                << "  accuracy=" << (runtime->prediction_accuracy() * 100.0) << "%"
+                << "  | " << runtime->input_context()
                 << "\n";
     }
   }
 
   std::cout << "\nDone. " << total_steps << " steps processed.\n";
   std::cout << "Final prediction accuracy: "
-            << (runtime.prediction_accuracy() * 100.0) << "%\n";
+            << (runtime->prediction_accuracy() * 100.0) << "%\n";
 
   return 0;
 }
