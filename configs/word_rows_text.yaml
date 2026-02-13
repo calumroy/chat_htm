@@ -46,7 +46,7 @@ layers:
       cells_per_column: 6
       max_segments_per_cell: 6
       max_synapses_per_segment: 12
-      min_num_syn_threshold: 4
+      min_num_syn_threshold: 10
       new_syn_permanence: 0.3
       connect_permanence: 0.2
       activation_threshold: 6
