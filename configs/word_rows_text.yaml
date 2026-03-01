@@ -43,7 +43,7 @@ layers:
       permanence_dec: 0.04
       active_col_permanence_dec: 0.04
     sequence_memory:
-      cells_per_column: 6
+      cells_per_column: 3
       max_segments_per_cell: 3
       max_synapses_per_segment: 12
       min_num_syn_threshold: 2
