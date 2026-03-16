@@ -32,7 +32,7 @@ layers:
     inhibition:
       width: 36
       height: 1
-      desired_local_activity: 2
+      desired_local_activity: 1
       strict_local_activity: false
     spatial_learning:
       permanence_inc: 0.08
@@ -72,7 +72,7 @@ layers:
     inhibition:
       width: 40
       height: 5
-      desired_local_activity: 2
+      desired_local_activity: 8
       strict_local_activity: false
     spatial_learning:
       permanence_inc: 0.06
@@ -83,7 +83,7 @@ layers:
       max_segments_per_cell: 6
       max_synapses_per_segment: 20
       min_num_syn_threshold: 3
-      new_syn_permanence: 0.3
+      new_syn_permanence: 0.1
       connect_permanence: 0.2
       activation_threshold: 6
       permanence_inc: 0.06
