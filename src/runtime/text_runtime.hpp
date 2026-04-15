@@ -56,6 +56,8 @@ public:
   void set_input_sequence(int /*id*/) override {}
   int activation_threshold() const override;
   std::string name() const override;
+  int timestep() const override { return region_ ? region_->timestep() : 0; }
+  htm_gui::RuntimePatchResult apply_runtime_patch_file(const std::string& path) override;
 
   // --- Layer selection for GUI ---
   std::vector<htm_gui::InputSequence> layer_options() const override;

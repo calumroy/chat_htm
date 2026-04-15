@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 
 #include <htm_flow/config.hpp>
@@ -49,6 +52,16 @@ htm_flow::HTMRegionConfig make_test_config(int input_rows, int input_cols) {
   htm_flow::HTMRegionConfig cfg;
   cfg.layers.push_back(layer);
   return cfg;
+}
+
+std::filesystem::path write_temp_yaml(const std::string& stem, const std::string& contents) {
+  const auto stamp = std::chrono::steady_clock::now().time_since_epoch().count();
+  const auto path = std::filesystem::temp_directory_path() /
+                    (stem + "_" + std::to_string(stamp) + ".yaml");
+  std::ofstream out(path);
+  out << contents;
+  out.close();
+  return path;
 }
 
 }  // namespace
@@ -167,6 +180,33 @@ TEST(TextHTMIntegration, LoadFromYAML) {
       TextChunker::from_string("test"));
   TextRuntime rt(cfg, std::move(chunker), enc, "yaml_test");
   rt.step(10);
+}
+
+TEST(TextHTMIntegration, RuntimePatchFileUpdatesLiveParameters) {
+  int rows = 10, cols = 10;
+  auto cfg = make_test_config(rows, cols);
+  ScalarEncoder::Params ep{.n = rows * cols, .w = 9, .min_val = 0, .max_val = 127};
+  ScalarEncoder enc(ep);
+
+  auto chunker = std::make_unique<TextChunker>(TextChunker::from_string("abcabcabc"));
+  TextRuntime rt(cfg, std::move(chunker), enc, "runtime_patch");
+  rt.step(3);
+  ASSERT_EQ(rt.timestep(), 3);
+
+  const auto patch_path = write_temp_yaml(
+      "text_runtime_patch",
+      R"(layers:
+  - spatial_learning:
+      permanence_inc: 0.23
+    sequence_memory:
+      activation_threshold: 8
+)");
+
+  const auto result = rt.apply_runtime_patch_file(patch_path.string());
+  ASSERT_TRUE(result.ok) << result.message;
+  EXPECT_EQ(rt.timestep(), 3);
+  EXPECT_FLOAT_EQ(rt.region().layer(0).config().spatial_permanence_inc, 0.23f);
+  EXPECT_EQ(rt.region().layer(0).config().activation_threshold, 8);
 }
 
 TEST(TextHTMIntegration, WordRowsModeLearnsSimpleSentenceSequence) {

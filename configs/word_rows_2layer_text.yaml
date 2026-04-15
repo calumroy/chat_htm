@@ -76,8 +76,8 @@ layers:
       strict_local_activity: false
     spatial_learning:
       permanence_inc: 0.06
-      permanence_dec: 0.04
-      active_col_permanence_dec: 0.04
+      permanence_dec: 0.01
+      active_col_permanence_dec: 0.01
     sequence_memory:
       cells_per_column: 4
       max_segments_per_cell: 6
@@ -91,5 +91,5 @@ layers:
     temporal_pooling:
       enabled: true
       delay_length: 6
-      spatial_permanence_inc: 0.3
+      spatial_permanence_inc: 0.08
       sequence_permanence_inc: 0.04

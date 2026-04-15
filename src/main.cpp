@@ -183,8 +183,10 @@ int main(int argc, char* argv[]) {
 
   // --- Load configuration ---
   htm_flow::HTMRegionConfig region_cfg;
+  std::vector<htm_flow::RuntimeParameterScheduleEntry> runtime_schedule;
   try {
     region_cfg = htm_flow::load_region_config(config_file);
+    runtime_schedule = htm_flow::load_runtime_parameter_schedule(config_file);
   } catch (const std::exception& e) {
     std::cerr << "Error loading config: " << e.what() << "\n";
     return 1;
@@ -270,7 +272,22 @@ int main(int argc, char* argv[]) {
 
   // --- Headless mode ---
   int log_interval = std::max(1, total_steps / 20);  // Log ~20 times
+  std::size_t next_override = 0;
   for (int i = 0; i < total_steps; ++i) {
+    while (next_override < runtime_schedule.size() &&
+           runtime_schedule[next_override].at_timestep == runtime->timestep()) {
+      const auto& item = runtime_schedule[next_override];
+      const auto result = runtime->apply_runtime_patch_file(item.override_path);
+      std::ostream& stream = result.ok ? std::cout : std::cerr;
+      stream << "[runtime_patch] t=" << runtime->timestep()
+             << " file=" << item.override_path
+             << " | " << result.message << "\n";
+      if (!result.ok) {
+        return 1;
+      }
+      ++next_override;
+    }
+
     runtime->step(1);
 
     if (log && (i % log_interval == 0 || i == total_steps - 1)) {

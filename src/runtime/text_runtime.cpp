@@ -1,5 +1,7 @@
 #include "runtime/text_runtime.hpp"
 
+#include <htm_flow/config_loader.hpp>
+
 #include <algorithm>
 #include <iomanip>
 #include <iostream>
@@ -139,6 +141,20 @@ int TextRuntime::activation_threshold() const {
 std::string TextRuntime::name() const {
   return name_ + " (Layer " + std::to_string(active_layer_idx_) + "/"
          + std::to_string(num_layers()) + ")";
+}
+
+htm_gui::RuntimePatchResult TextRuntime::apply_runtime_patch_file(const std::string& path) {
+  if (!region_) {
+    return {false, "Cannot apply runtime patch: no region is loaded."};
+  }
+
+  try {
+    const htm_flow::HTMRegionRuntimePatch patch = htm_flow::load_runtime_patch(path);
+    const htm_flow::RuntimePatchReport report = region_->apply_runtime_patch(patch);
+    return {report.ok(), htm_flow::format_runtime_patch_report(report)};
+  } catch (const std::exception& e) {
+    return {false, e.what()};
+  }
 }
 
 std::vector<htm_gui::InputSequence> TextRuntime::layer_options() const {

@@ -1,0 +1,5 @@
+if(EXISTS "/home/calum/Documents/projects/chat_htm/build_htm_flow_tests/htm_flow_tests[1]_tests.cmake")
+  include("/home/calum/Documents/projects/chat_htm/build_htm_flow_tests/htm_flow_tests[1]_tests.cmake")
+else()
+  add_test(htm_flow_tests_NOT_BUILT htm_flow_tests_NOT_BUILT)
+endif()
