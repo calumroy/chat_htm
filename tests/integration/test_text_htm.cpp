@@ -433,3 +433,101 @@ TEST(TextHTMIntegration, AlwaysOnTemporalPoolingDoesNotRaiseLayer1BurstingVsNoTP
       << "Always-on temporal pooling reduced Layer 1 learning coverage too much. off="
       << off_metrics.mean_learning_fraction << " on=" << on_metrics.mean_learning_fraction;
 }
+
+TEST(TextHTMIntegration, AlwaysOnTemporalPoolingWithPersistenceDoesNotRaiseLayer1BurstingVsNoTP) {
+  const std::string config_path =
+      test_data_dir() + "/../../configs/word_rows_2layer_text.yaml";
+
+  htm_flow::HTMRegionConfig cfg_off;
+  ASSERT_NO_THROW(cfg_off = htm_flow::load_region_config(config_path));
+  ASSERT_EQ(cfg_off.layers.size(), 2u);
+  cfg_off.layers[1].temp_enabled = false;
+  cfg_off.layers[1].temp_enable_persistence = false;
+
+  htm_flow::HTMRegionConfig cfg_on = cfg_off;
+  cfg_on.layers[1].temp_enabled = true;
+  cfg_on.layers[1].temp_enable_persistence = true;
+  cfg_on.layers[1].temp_delay_length = 6;
+  cfg_on.layers[1].temp_spatial_permanence_inc = 0.01f;
+  cfg_on.layers[1].temp_sequence_permanence_inc = 0.08f;
+  cfg_on.layers[1].temp_sequence_permanence_dec = 0.01f;
+
+  const auto encoder_params = parse_word_row_encoder_params(
+      config_path, cfg_on.layers[0].num_input_rows, cfg_on.layers[0].num_input_cols);
+  WordRowEncoder enc(encoder_params);
+
+  auto chunker_off = std::make_unique<WordChunker>(
+      WordChunker::from_string("small cat likes warm milk small dog likes warm soup "));
+  auto chunker_on = std::make_unique<WordChunker>(
+      WordChunker::from_string("small cat likes warm milk small dog likes warm soup "));
+
+  TextRuntime rt_off(cfg_off, std::move(chunker_off), enc, "word_rows_tp_off");
+  TextRuntime rt_on(cfg_on, std::move(chunker_on), enc, "word_rows_tp_persistent");
+
+  const int warmup_steps = 900;
+  const int measure_steps = 120;
+  rt_off.step(warmup_steps);
+  rt_on.step(warmup_steps);
+
+  const LayerWindowMetrics off_metrics = sample_layer_window(rt_off, /*layer_idx=*/1, measure_steps);
+  const LayerWindowMetrics on_metrics = sample_layer_window(rt_on, /*layer_idx=*/1, measure_steps);
+
+  EXPECT_LE(on_metrics.mean_burst_fraction, off_metrics.mean_burst_fraction + 0.10)
+      << "Persistence-enabled temporal pooling increased Layer 1 bursting too much. off="
+      << off_metrics.mean_burst_fraction << " on=" << on_metrics.mean_burst_fraction;
+  EXPECT_GE(on_metrics.mean_predictive_fraction, off_metrics.mean_predictive_fraction - 0.10)
+      << "Persistence-enabled temporal pooling reduced Layer 1 predictive coverage too much. off="
+      << off_metrics.mean_predictive_fraction << " on=" << on_metrics.mean_predictive_fraction;
+  EXPECT_GE(on_metrics.mean_learning_fraction, off_metrics.mean_learning_fraction - 0.10)
+      << "Persistence-enabled temporal pooling reduced Layer 1 learning coverage too much. off="
+      << off_metrics.mean_learning_fraction << " on=" << on_metrics.mean_learning_fraction;
+}
+
+TEST(TextHTMIntegration, StrongTemporalPoolingDoesNotRaiseLayer1BurstingVsNoTP) {
+  const std::string config_path =
+      test_data_dir() + "/../../configs/word_rows_2layer_text.yaml";
+
+  htm_flow::HTMRegionConfig cfg_off;
+  ASSERT_NO_THROW(cfg_off = htm_flow::load_region_config(config_path));
+  ASSERT_EQ(cfg_off.layers.size(), 2u);
+  cfg_off.layers[1].temp_enabled = false;
+  cfg_off.layers[1].temp_enable_persistence = false;
+
+  htm_flow::HTMRegionConfig cfg_on = cfg_off;
+  cfg_on.layers[1].temp_enabled = true;
+  cfg_on.layers[1].temp_enable_persistence = true;
+  cfg_on.layers[1].temp_delay_length = 8;
+  cfg_on.layers[1].temp_spatial_permanence_inc = 0.04f;
+  cfg_on.layers[1].temp_sequence_permanence_inc = 0.18f;
+  cfg_on.layers[1].temp_sequence_permanence_dec = 0.004f;
+
+  const auto encoder_params = parse_word_row_encoder_params(
+      config_path, cfg_on.layers[0].num_input_rows, cfg_on.layers[0].num_input_cols);
+  WordRowEncoder enc(encoder_params);
+
+  auto chunker_off = std::make_unique<WordChunker>(
+      WordChunker::from_string("small cat likes warm milk small dog likes warm soup "));
+  auto chunker_on = std::make_unique<WordChunker>(
+      WordChunker::from_string("small cat likes warm milk small dog likes warm soup "));
+
+  TextRuntime rt_off(cfg_off, std::move(chunker_off), enc, "word_rows_tp_off");
+  TextRuntime rt_on(cfg_on, std::move(chunker_on), enc, "word_rows_tp_strong");
+
+  const int warmup_steps = 900;
+  const int measure_steps = 120;
+  rt_off.step(warmup_steps);
+  rt_on.step(warmup_steps);
+
+  const LayerWindowMetrics off_metrics = sample_layer_window(rt_off, /*layer_idx=*/1, measure_steps);
+  const LayerWindowMetrics on_metrics = sample_layer_window(rt_on, /*layer_idx=*/1, measure_steps);
+
+  EXPECT_LE(on_metrics.mean_burst_fraction, off_metrics.mean_burst_fraction + 0.10)
+      << "Strong temporal pooling increased Layer 1 bursting too much. off="
+      << off_metrics.mean_burst_fraction << " on=" << on_metrics.mean_burst_fraction;
+  EXPECT_GE(on_metrics.mean_predictive_fraction, off_metrics.mean_predictive_fraction - 0.10)
+      << "Strong temporal pooling reduced Layer 1 predictive coverage too much. off="
+      << off_metrics.mean_predictive_fraction << " on=" << on_metrics.mean_predictive_fraction;
+  EXPECT_GE(on_metrics.mean_learning_fraction, off_metrics.mean_learning_fraction - 0.10)
+      << "Strong temporal pooling reduced Layer 1 learning coverage too much. off="
+      << off_metrics.mean_learning_fraction << " on=" << on_metrics.mean_learning_fraction;
+}
