@@ -55,8 +55,9 @@ layers:
   # Layer 1 - Abstraction layer with wide receptive fields over Layer 0.
   # pot_width covers the full column width (168) and pot_height covers all
   # 5 rows so every Layer 1 column can potentially connect to any Layer 0
-  # column.  Temporal pooling is aggressive to build stable representations
-  # that persist across words in a sentence.
+  # column. Temporal pooling is kept enabled from the start, but tuned to be
+  # distal-dominant and low-pressure on proximal synapses so it does not
+  # create a burst spike while sequence memory is still forming.
   - name: Layer1_Abstraction
     columns:
       rows: 5
@@ -89,11 +90,9 @@ layers:
       permanence_inc: 0.06
       permanence_dec: 0.04
     temporal_pooling:
-      enabled: false
+      enabled: true
+      enable_persistence: false
       delay_length: 6
-      spatial_permanence_inc: 0.08
-      sequence_permanence_inc: 0.04
-
-runtime_parameter_schedule:
-  - at_timestep: 1000
-    override: overrides/layer1_enable_temporal_pooling.yaml
+      spatial_permanence_inc: 0.01
+      sequence_permanence_inc: 0.08
+      sequence_permanence_dec: 0.01
