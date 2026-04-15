@@ -1,0 +1,8 @@
+layers:
+  # Empty map means "leave Layer 0 unchanged".
+  - {}
+  - temporal_pooling:
+      enabled: true
+      delay_length: 6
+      spatial_permanence_inc: 0.08
+      sequence_permanence_inc: 0.04

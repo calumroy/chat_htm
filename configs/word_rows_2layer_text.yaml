@@ -89,7 +89,11 @@ layers:
       permanence_inc: 0.06
       permanence_dec: 0.04
     temporal_pooling:
-      enabled: true
+      enabled: false
       delay_length: 6
       spatial_permanence_inc: 0.08
       sequence_permanence_inc: 0.04
+
+runtime_parameter_schedule:
+  - at_timestep: 1000
+    override: overrides/layer1_enable_temporal_pooling.yaml
