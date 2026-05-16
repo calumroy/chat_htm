@@ -1,7 +1,7 @@
-# Two-Layer Word-Row Text HTM Configuration
+# Two-Layer Word-Row Text HTM Configuration with delayed temporal pooling
 # Layer 0: word-row sensory layer (same as word_rows_text.yaml).
-# Layer 1: abstraction layer with global receptive fields and aggressive
-#           temporal pooling to build stable word-sequence representations.
+# Layer 1: abstraction layer starts with temporal pooling disabled, then the
+#          runtime override below enables it at timestep 1000.
 
 text:
   mode: word_rows
@@ -11,6 +11,10 @@ encoder:
   alphabet: "abcdefghijklmnopqrstuvwxyz"
 
 enable_feedback: false
+
+runtime_parameter_schedule:
+  - at_timestep: 1000
+    override: overrides/word_rows_2layer_enable_temporal_pooling.yaml
 
 layers:
   # Layer 0 - Sensory layer (one row per character position in the word)
@@ -55,9 +59,9 @@ layers:
   # Layer 1 - Abstraction layer with wide receptive fields over Layer 0.
   # pot_width covers the full column width (168) and pot_height covers all
   # 5 rows so every Layer 1 column can potentially connect to any Layer 0
-  # column. Temporal pooling is kept enabled from the start, but tuned to be
-  # distal-dominant and low-pressure on proximal synapses so it does not
-  # create a burst spike while sequence memory is still forming.
+  # column. Temporal pooling starts disabled so sequence memory can form first;
+  # configs/overrides/word_rows_2layer_enable_temporal_pooling.yaml enables it
+  # at timestep 1000 using the tuned values below.
   - name: Layer1_Abstraction
     columns:
       rows: 5
@@ -90,7 +94,7 @@ layers:
       permanence_inc: 0.06
       permanence_dec: 0.04
     temporal_pooling:
-      enabled: true
+      enabled: false
       enable_persistence: true
       delay_length: 8
       spatial_permanence_inc: 0.04

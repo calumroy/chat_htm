@@ -1,0 +1,12 @@
+# Runtime patch for configs/word_rows_2layer_delayed_temporal_pooling_text.yaml.
+# Layer 0 is intentionally left unchanged; Layer 1 temporal pooling is enabled.
+
+layers:
+  - {}
+  - temporal_pooling:
+      enabled: true
+      enable_persistence: true
+      delay_length: 16
+      spatial_permanence_inc: 0.06
+      sequence_permanence_inc: 0.35
+      sequence_permanence_dec: 0.001

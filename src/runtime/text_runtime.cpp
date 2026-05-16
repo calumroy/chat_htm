@@ -52,6 +52,8 @@ void TextRuntime::step(int n) {
   if (input_mode_ == InputMode::WordRows && !word_chunker_) return;
 
   for (int i = 0; i < n; ++i) {
+    apply_due_runtime_patches();
+
     if (total_predictions_ > 0 || region_->timestep() > 0) {
       const auto& layer0 = region_->layer(0);
       auto snap = layer0.snapshot();
@@ -96,6 +98,32 @@ void TextRuntime::step(int n) {
                 << "  | " << input_context()
                 << std::endl;
     }
+  }
+}
+
+void TextRuntime::set_runtime_schedule(
+    std::vector<htm_flow::RuntimeParameterScheduleEntry> schedule) {
+  runtime_schedule_ = std::move(schedule);
+  next_runtime_override_ = 0;
+}
+
+void TextRuntime::apply_due_runtime_patches() {
+  if (!region_) {
+    return;
+  }
+
+  while (next_runtime_override_ < runtime_schedule_.size() &&
+         runtime_schedule_[next_runtime_override_].at_timestep == region_->timestep()) {
+    const auto& item = runtime_schedule_[next_runtime_override_];
+    const auto result = apply_runtime_patch_file(item.override_path);
+    std::ostream& stream = result.ok ? std::cout : std::cerr;
+    stream << "[runtime_patch] t=" << region_->timestep()
+           << " file=" << item.override_path
+           << " | " << result.message << std::endl;
+    if (!result.ok) {
+      throw std::runtime_error("Failed to apply runtime patch: " + result.message);
+    }
+    ++next_runtime_override_;
   }
 }
 

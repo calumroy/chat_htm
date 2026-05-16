@@ -87,6 +87,9 @@ public:
   void set_log_text(bool enabled) { log_text_ = enabled; }
   bool log_text() const { return log_text_; }
 
+  /// Schedule runtime config patches to apply before matching timesteps.
+  void set_runtime_schedule(std::vector<htm_flow::RuntimeParameterScheduleEntry> schedule);
+
   /// Cumulative prediction accuracy (fraction of steps where the HTM
   /// predicted the correct next column activation pattern).
   double prediction_accuracy() const;
@@ -98,6 +101,7 @@ private:
   std::string text_context() const;
   /// Build a context string showing surrounding words with current word highlighted.
   std::string word_context() const;
+  void apply_due_runtime_patches();
 
   std::unique_ptr<htm_flow::HTMRegion> region_;
   std::unique_ptr<TextChunker> chunker_;
@@ -108,6 +112,8 @@ private:
   std::string name_;
   int active_layer_idx_{0};
   bool log_text_{false};
+  std::vector<htm_flow::RuntimeParameterScheduleEntry> runtime_schedule_;
+  std::size_t next_runtime_override_{0};
 
   char last_char_{'\0'};
   std::string last_word_;
