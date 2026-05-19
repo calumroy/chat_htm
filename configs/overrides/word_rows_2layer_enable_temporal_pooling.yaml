@@ -5,8 +5,8 @@ layers:
   - {}
   - temporal_pooling:
       enabled: true
-      enable_persistence: true
+      enable_persistence: false
       delay_length: 16
-      spatial_permanence_inc: 0.06
-      sequence_permanence_inc: 0.35
-      sequence_permanence_dec: 0.001
+      spatial_permanence_inc: 0.05
+      sequence_permanence_inc: 0.21
+      sequence_permanence_dec: 0.002

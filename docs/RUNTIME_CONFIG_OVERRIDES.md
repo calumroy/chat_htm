@@ -28,6 +28,10 @@ layers:
       sequence_permanence_dec: 0.004
 ```
 
+For safer delayed temporal pooling, use `spatial_permanence_inc` as the local TP
+proximal reinforcement knob. It only reinforces columns that had active-predict
+support in the previous temporal pooler distal update.
+
 Run it like any other config:
 
 ```bash

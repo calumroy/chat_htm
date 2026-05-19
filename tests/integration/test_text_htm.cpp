@@ -283,6 +283,8 @@ TEST(TextHTMIntegration, RuntimePatchFileUpdatesLiveParameters) {
       permanence_inc: 0.23
     sequence_memory:
       activation_threshold: 8
+    temporal_pooling:
+      spatial_permanence_inc: 0.07
 )");
 
   const auto result = rt.apply_runtime_patch_file(patch_path.string());
@@ -290,6 +292,28 @@ TEST(TextHTMIntegration, RuntimePatchFileUpdatesLiveParameters) {
   EXPECT_EQ(rt.timestep(), 3);
   EXPECT_FLOAT_EQ(rt.region().layer(0).config().spatial_permanence_inc, 0.23f);
   EXPECT_EQ(rt.region().layer(0).config().activation_threshold, 8);
+  EXPECT_FLOAT_EQ(rt.region().layer(0).config().temp_spatial_permanence_inc, 0.07f);
+}
+
+TEST(TextHTMIntegration, ConfigYAMLLoadsTemporalPoolingProximalReinforcement) {
+  const auto config_path = write_temp_yaml(
+      "tp_proximal_reinforcement_config",
+      R"(layers:
+  - input:
+      rows: 10
+      cols: 10
+    columns:
+      rows: 10
+      cols: 20
+    temporal_pooling:
+      enabled: true
+      spatial_permanence_inc: 0.075
+)");
+
+  htm_flow::HTMRegionConfig cfg;
+  ASSERT_NO_THROW(cfg = htm_flow::load_region_config(config_path.string()));
+  ASSERT_EQ(cfg.layers.size(), 1u);
+  EXPECT_FLOAT_EQ(cfg.layers[0].temp_spatial_permanence_inc, 0.075f);
 }
 
 TEST(TextHTMIntegration, WordRowsModeLearnsSimpleSentenceSequence) {
@@ -332,7 +356,7 @@ TEST(TextHTMIntegration, RuntimeEnableTemporalPoolingDoesNotSpikeLayer1Bursting)
   cfg.layers[1].temp_enabled = false;
   cfg.layers[1].temp_enable_persistence = false;
   cfg.layers[1].temp_delay_length = 6;
-  cfg.layers[1].temp_spatial_permanence_inc = 0.01f;
+  cfg.layers[1].temp_spatial_permanence_inc = 0.0f;
   cfg.layers[1].temp_sequence_permanence_inc = 0.08f;
   cfg.layers[1].temp_sequence_permanence_dec = 0.01f;
 
@@ -368,6 +392,7 @@ TEST(TextHTMIntegration, RuntimeEnableTemporalPoolingDoesNotSpikeLayer1Bursting)
 )");
   const auto result = rt.apply_runtime_patch_file(patch_path.string());
   ASSERT_TRUE(result.ok) << result.message;
+  EXPECT_FLOAT_EQ(rt.region().layer(1).config().temp_spatial_permanence_inc, 0.01f);
 
   const int post_window = compare_window;
   ASSERT_GT(post_window, 0);
