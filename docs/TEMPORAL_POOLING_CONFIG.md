@@ -19,7 +19,6 @@ temporal_pooling:
   delay_length: 16
   spatial_permanence_inc: 0.12
   active_predict_proximal_scale: 0.25
-  predictive_non_active_proximal_scale: 0.0
   post_active_proximal_scale: 0.5
   sequence_permanence_inc: 0.21
   sequence_permanence_dec: 0.002
@@ -27,9 +26,9 @@ temporal_pooling:
 
 This is meant to keep meaningful proximal temporal pooling while avoiding the
 old burst spike. Headless true-burst diagnostics show that
-`predictive_non_active_proximal_scale` is still the riskiest path because it can
-make columns win before distal sequence memory predicts them. The post-active
-bridge is safer once Layer 1 has enough cells per column.
+the direct predicted-non-active proximal path was removed because it made
+columns win before distal sequence memory predicted them. The post-active bridge
+is safer once Layer 1 has enough cells per column.
 
 For the current word-row Layer 1 abstraction config, use
 `sequence_memory.cells_per_column: 6` and
@@ -59,16 +58,18 @@ and created excessive multi-cell predicted activity.
 
 - `active_predict_proximal_scale`: multiplier for proximal reinforcement on
   columns that were active and correctly predicted. This is the safest TP
-  proximal path because the column already avoided bursting.
-
-- `predictive_non_active_proximal_scale`: multiplier for columns that were
-  segment-backed predictive but did not win inhibition. Keep this low or zero
-  while tuning bursting; raising it can make predicted non-winners become future
-  winners before their distal context is reliable enough.
+  proximal path because the column already avoided bursting. The proximal
+  permanence increment for an active input synapse is
+  `spatial_permanence_inc * active_predict_count * active_predict_proximal_scale`.
+  Values below `1.0` damp the base increment; values above `1.0` amplify it.
 
 - `post_active_proximal_scale`: multiplier for the one-step bridge after a
   correctly predicted activation. This is useful for extending proximal support
-  across nearby sequence inputs, but keep an eye on `true_burst_fraction`.
+  across nearby sequence inputs, but keep an eye on `true_burst_fraction`. The
+  extra proximal increment is
+  `spatial_permanence_inc * post_active_proximal_scale` for active input
+  synapses on a column that was active-predict one timestep ago and remains
+  segment-backed predictive now.
 
 - `sequence_permanence_inc`: distal TP learning rate. This controls how quickly
   TP-created distal synapses become useful for prediction. This should usually
@@ -81,17 +82,14 @@ and created excessive multi-cell predicted activity.
 ## Tuning Order
 
 1. Keep `enable_persistence: false`.
-2. Keep `predictive_non_active_proximal_scale: 0.0` at first.
-3. Tune `sequence_permanence_inc` until predictive coverage improves.
-4. Increase `spatial_permanence_inc` gradually with a conservative
+2. Tune `sequence_permanence_inc` until predictive coverage improves.
+3. Increase `spatial_permanence_inc` gradually with a conservative
    `active_predict_proximal_scale`.
-5. Add `post_active_proximal_scale` if active-predict columns need
+4. Add `post_active_proximal_scale` if active-predict columns need
    more continuity and true bursts remain low.
-6. Raise `predictive_non_active_proximal_scale` last, and only if non-winning
-   predicted columns need help becoming active through overlap and inhibition.
-7. Watch Layer 1 bursting. If bursting rises, back off the non-active scales
+5. Watch Layer 1 bursting. If bursting rises, back off `post_active_proximal_scale`
    before changing persistence.
-8. Only test `enable_persistence: true` after non-persistence TP is stable.
+6. Only test `enable_persistence: true` after non-persistence TP is stable.
 
 ## What To Watch
 
@@ -111,12 +109,12 @@ Bad signs:
 - `true_burst_fraction` rises while `new_true_burst_causes` reports
   `no_prev_prediction`:
   proximal TP is making unpredicted columns win; reduce
-  `spatial_permanence_inc`, `predictive_non_active_proximal_scale`, or
-  `post_active_proximal_scale`. If proximal TP is already weak or disabled,
-  lower `sequence_memory.activation_threshold` carefully.
+  `spatial_permanence_inc` or `post_active_proximal_scale`. If proximal TP is
+  already weak or disabled, lower `sequence_memory.activation_threshold`
+  carefully.
 - a small set of columns dominates every timestep:
-  `spatial_permanence_inc` or `predictive_non_active_proximal_scale` may be too
-  high, or Layer 1 spatial pooling is too collapsed before TP turns on.
+  `spatial_permanence_inc` or `post_active_proximal_scale` may be too high, or
+  Layer 1 spatial pooling is too collapsed before TP turns on.
 - bursting rises after enabling persistence:
   turn persistence back off and tune distal/proximal learning first.
 

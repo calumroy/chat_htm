@@ -23,6 +23,7 @@ add_subdirectory(htm_flow)
 # -----------------------------------------------------------------------------
 add_executable(chat_htm
   src/main.cpp
+  src/diagnostics/layer_metrics.cpp
   src/runtime/text_runtime.cpp
 )
 

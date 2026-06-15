@@ -286,7 +286,6 @@ TEST(TextHTMIntegration, RuntimePatchFileUpdatesLiveParameters) {
     temporal_pooling:
       spatial_permanence_inc: 0.07
       active_predict_proximal_scale: 0.8
-      predictive_non_active_proximal_scale: 0.2
       post_active_proximal_scale: 0.1
 )");
 
@@ -297,7 +296,6 @@ TEST(TextHTMIntegration, RuntimePatchFileUpdatesLiveParameters) {
   EXPECT_EQ(rt.region().layer(0).config().activation_threshold, 8);
   EXPECT_FLOAT_EQ(rt.region().layer(0).config().temp_spatial_permanence_inc, 0.07f);
   EXPECT_FLOAT_EQ(rt.region().layer(0).config().temp_active_predict_proximal_scale, 0.8f);
-  EXPECT_FLOAT_EQ(rt.region().layer(0).config().temp_predictive_non_active_proximal_scale, 0.2f);
   EXPECT_FLOAT_EQ(rt.region().layer(0).config().temp_post_active_proximal_scale, 0.1f);
 }
 
@@ -315,7 +313,6 @@ TEST(TextHTMIntegration, ConfigYAMLLoadsTemporalPoolingProximalReinforcement) {
       enabled: true
       spatial_permanence_inc: 0.075
       active_predict_proximal_scale: 0.9
-      predictive_non_active_proximal_scale: 0.25
       post_active_proximal_scale: 0.1
 )");
 
@@ -324,7 +321,6 @@ TEST(TextHTMIntegration, ConfigYAMLLoadsTemporalPoolingProximalReinforcement) {
   ASSERT_EQ(cfg.layers.size(), 1u);
   EXPECT_FLOAT_EQ(cfg.layers[0].temp_spatial_permanence_inc, 0.075f);
   EXPECT_FLOAT_EQ(cfg.layers[0].temp_active_predict_proximal_scale, 0.9f);
-  EXPECT_FLOAT_EQ(cfg.layers[0].temp_predictive_non_active_proximal_scale, 0.25f);
   EXPECT_FLOAT_EQ(cfg.layers[0].temp_post_active_proximal_scale, 0.1f);
 }
 
