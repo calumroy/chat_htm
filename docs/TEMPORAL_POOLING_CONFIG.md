@@ -14,6 +14,9 @@ temporal_pooling:
   enable_persistence: false
   delay_length: 16
   spatial_permanence_inc: 0.05
+  active_predict_proximal_scale: 0.25
+  predictive_non_active_proximal_scale: 0.0
+  post_active_proximal_scale: 0.1
   sequence_permanence_inc: 0.21
   sequence_permanence_dec: 0.002
 ```
@@ -41,6 +44,19 @@ more reinforced inputs.
   low means TP predicts distally but does not change winners. Too high can make
   a small set of columns sticky and burst-prone.
 
+- `active_predict_proximal_scale`: multiplier for proximal reinforcement on
+  columns that were active and correctly predicted. This is the safest TP
+  proximal path because the column already avoided bursting.
+
+- `predictive_non_active_proximal_scale`: multiplier for columns that were
+  segment-backed predictive but did not win inhibition. Keep this low or zero
+  while tuning bursting; raising it can make predicted non-winners become future
+  winners before their distal context is reliable enough.
+
+- `post_active_proximal_scale`: multiplier for the one-step bridge after a
+  correctly predicted activation. Small values can help continuity without
+  turning every segment-backed prediction into immediate proximal pressure.
+
 - `sequence_permanence_inc`: distal TP learning rate. This controls how quickly
   TP-created distal synapses become useful for prediction. This should usually
   be stronger than `spatial_permanence_inc`.
@@ -52,12 +68,17 @@ more reinforced inputs.
 ## Tuning Order
 
 1. Keep `enable_persistence: false`.
-2. Tune `sequence_permanence_inc` until predictive coverage improves.
-3. Increase `spatial_permanence_inc` gradually until predicted columns sometimes
-   become active through overlap and inhibition.
-4. Watch Layer 1 bursting. If bursting rises, back off `spatial_permanence_inc`
+2. Keep `predictive_non_active_proximal_scale: 0.0` at first.
+3. Tune `sequence_permanence_inc` until predictive coverage improves.
+4. Increase `spatial_permanence_inc` gradually with a conservative
+   `active_predict_proximal_scale`.
+5. Add a small `post_active_proximal_scale` only if active-predict columns need
+   more continuity.
+6. Raise `predictive_non_active_proximal_scale` last, and only if non-winning
+   predicted columns need help becoming active through overlap and inhibition.
+7. Watch Layer 1 bursting. If bursting rises, back off the non-active scales
    before changing persistence.
-5. Only test `enable_persistence: true` after non-persistence TP is stable.
+8. Only test `enable_persistence: true` after non-persistence TP is stable.
 
 ## What To Watch
 
@@ -71,10 +92,10 @@ Useful signs:
 Bad signs:
 
 - `reinforced_inputs` is non-zero but active columns do not change:
-  `spatial_permanence_inc` may be too small.
+  `spatial_permanence_inc` or the non-active proximal scales may be too small.
 - a small set of columns dominates every timestep:
-  `spatial_permanence_inc` may be too high, or Layer 1 spatial pooling is too
-  collapsed before TP turns on.
+  `spatial_permanence_inc` or `predictive_non_active_proximal_scale` may be too
+  high, or Layer 1 spatial pooling is too collapsed before TP turns on.
 - bursting rises after enabling persistence:
   turn persistence back off and tune distal/proximal learning first.
 

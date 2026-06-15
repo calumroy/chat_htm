@@ -24,6 +24,9 @@ layers:
       enable_persistence: true
       delay_length: 8
       spatial_permanence_inc: 0.04
+      active_predict_proximal_scale: 0.25
+      predictive_non_active_proximal_scale: 0.0
+      post_active_proximal_scale: 0.1
       sequence_permanence_inc: 0.2
       sequence_permanence_dec: 0.004
 ```
@@ -31,6 +34,11 @@ layers:
 For safer delayed temporal pooling, use `spatial_permanence_inc` as the local TP
 proximal reinforcement knob. It only reinforces columns that had active-predict
 support in the previous temporal pooler distal update.
+
+Use the proximal scale knobs to choose which local TP evidence is allowed to
+change proximal permanence. `active_predict_proximal_scale` is the safest path;
+keep `predictive_non_active_proximal_scale` low or zero if enabling TP causes
+predicted non-winners to become burst-prone winners.
 
 Run it like any other config:
 

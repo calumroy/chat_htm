@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -73,6 +74,73 @@ std::string parse_gui_theme(const std::string& config_path) {
   }
   return {};
 }
+
+int popcount64(std::uint64_t value) {
+#if defined(__GNUG__) || defined(__clang__)
+  return __builtin_popcountll(value);
+#else
+  int count = 0;
+  while (value != 0) {
+    value &= (value - 1);
+    ++count;
+  }
+  return count;
+#endif
+}
+
+struct LayerMetrics {
+  int samples = 0;
+  double active_columns = 0.0;
+  double burst_fraction = 0.0;
+  double predictive_fraction = 0.0;
+  double learning_fraction = 0.0;
+
+  void add(const htm_gui::Snapshot& snap) {
+    const int active = static_cast<int>(snap.active_column_indices.size());
+    if (active <= 0) {
+      return;
+    }
+
+    int bursting = 0;
+    int predictive = 0;
+    int learning = 0;
+    for (int idx : snap.active_column_indices) {
+      if (idx < 0 || idx >= static_cast<int>(snap.column_cell_masks.size())) {
+        continue;
+      }
+      const auto& masks = snap.column_cell_masks[static_cast<std::size_t>(idx)];
+      if (popcount64(masks.active) > 1) {
+        ++bursting;
+      }
+      if (masks.predictive != 0) {
+        ++predictive;
+      }
+      if (masks.learning != 0) {
+        ++learning;
+      }
+    }
+
+    ++samples;
+    active_columns += static_cast<double>(active);
+    burst_fraction += static_cast<double>(bursting) / static_cast<double>(active);
+    predictive_fraction += static_cast<double>(predictive) / static_cast<double>(active);
+    learning_fraction += static_cast<double>(learning) / static_cast<double>(active);
+  }
+
+  void print(const std::string& label, int layer_idx) const {
+    if (samples <= 0) {
+      return;
+    }
+    const double denom = static_cast<double>(samples);
+    std::cout << label << " layer=" << layer_idx
+              << " samples=" << samples
+              << " active_cols=" << (active_columns / denom)
+              << " burst_fraction=" << (burst_fraction / denom)
+              << " predictive_fraction=" << (predictive_fraction / denom)
+              << " learning_fraction=" << (learning_fraction / denom)
+              << "\n";
+  }
+};
 
 chat_htm::ScalarEncoder::Params parse_scalar_encoder_params(const std::string& config_path,
                                                             int layer0_input_bits) {
@@ -274,12 +342,24 @@ int main(int argc, char* argv[]) {
 
   // --- Headless mode ---
   int log_interval = std::max(1, total_steps / 20);  // Log ~20 times
+  const int measured_layer = (runtime->num_layers() > 1) ? 1 : 0;
+  const int first_override_timestep =
+      runtime_schedule.empty() ? -1 : runtime_schedule.front().at_timestep;
+  LayerMetrics pre_override_metrics;
+  LayerMetrics post_override_metrics;
   for (int i = 0; i < total_steps; ++i) {
     try {
       runtime->step(1);
     } catch (const std::exception& e) {
       std::cerr << e.what() << "\n";
       return 1;
+    }
+
+    const auto layer_snapshot = runtime->region().layer(measured_layer).snapshot();
+    if (first_override_timestep >= 0 && runtime->timestep() > first_override_timestep) {
+      post_override_metrics.add(layer_snapshot);
+    } else {
+      pre_override_metrics.add(layer_snapshot);
     }
 
     if (log && (i % log_interval == 0 || i == total_steps - 1)) {
@@ -294,6 +374,8 @@ int main(int argc, char* argv[]) {
   std::cout << "\nDone. " << total_steps << " steps processed.\n";
   std::cout << "Final prediction accuracy: "
             << (runtime->prediction_accuracy() * 100.0) << "%\n";
+  pre_override_metrics.print("Pre-override metrics", measured_layer);
+  post_override_metrics.print("Post-override metrics", measured_layer);
 
   return 0;
 }

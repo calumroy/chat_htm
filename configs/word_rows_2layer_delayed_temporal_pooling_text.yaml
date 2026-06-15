@@ -98,5 +98,8 @@ layers:
       enable_persistence: true
       delay_length: 8
       spatial_permanence_inc: 0.04
+      active_predict_proximal_scale: 0.25
+      predictive_non_active_proximal_scale: 0.0
+      post_active_proximal_scale: 0.0
       sequence_permanence_inc: 0.2
       sequence_permanence_dec: 0.004
