@@ -1,7 +1,7 @@
 # Two-Layer Word-Row Text HTM Configuration with delayed temporal pooling
 # Layer 0: word-row sensory layer (same as word_rows_text.yaml).
 # Layer 1: abstraction layer starts with temporal pooling disabled, then the
-#          runtime override below enables it at timestep 1000.
+#          runtime override below enables tuned TP at timestep 1000.
 
 text:
   mode: word_rows
@@ -19,6 +19,7 @@ runtime_parameter_schedule:
 layers:
   # Layer 0 - Sensory layer (one row per character position in the word)
   - name: Layer0_WordRows
+    random_seed: 123
     input:
       rows: 5
       cols: 216               # letter_bits * (26 + 1) = 216
@@ -60,9 +61,9 @@ layers:
   # pot_width covers the full column width (168) and pot_height covers all
   # 5 rows so every Layer 1 column can potentially connect to any Layer 0
   # column. Temporal pooling starts disabled so sequence memory can form first;
-  # configs/overrides/word_rows_2layer_enable_temporal_pooling.yaml enables it
-  # at timestep 1000 using the tuned values below.
+  # the runtime override then enables tuned temporal pooling.
   - name: Layer1_Abstraction
+    random_seed: 124
     columns:
       rows: 5
       cols: 40
@@ -90,16 +91,16 @@ layers:
       min_num_syn_threshold: 3
       new_syn_permanence: 0.1
       connect_permanence: 0.2
-      activation_threshold: 6
+      activation_threshold: 4
       permanence_inc: 0.06
       permanence_dec: 0.04
     temporal_pooling:
       enabled: false
-      enable_persistence: true
-      delay_length: 8
-      spatial_permanence_inc: 0.04
-      active_predict_proximal_scale: 0.25
+      enable_persistence: false
+      delay_length: 16
+      spatial_permanence_inc: 0.0
+      active_predict_proximal_scale: 0.0
       predictive_non_active_proximal_scale: 0.0
       post_active_proximal_scale: 0.0
-      sequence_permanence_inc: 0.2
-      sequence_permanence_dec: 0.004
+      sequence_permanence_inc: 0.0
+      sequence_permanence_dec: 0.0
