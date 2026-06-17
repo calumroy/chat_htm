@@ -1,0 +1,39 @@
+---
+description: Clear comment style for htm_flow C++ code
+globs: htm_flow/**/*.{hpp,cpp,h,cc}
+alwaysApply: false
+---
+
+# htm_flow Comment Style
+
+When writing or editing comments in `htm_flow` C++ code:
+
+- Use plain, specific words. Do not invent labels or jargon such as "bridge",
+  "seam", "support path", or "optional state" unless the code already uses that term.
+- Explain what the code does and why it exists. If the reason is obvious, keep
+  the comment short or remove it.
+- Say the behavior first, then name the exact setting or condition in parentheses.
+  Prefer "distal learning is off (by setting `seq_permanence_inc <= 0`)" over
+  only "`seq_permanence_inc <= 0`" or only "distal learning is off".
+- Use this order when explaining a branch: behavior first, exact setting second,
+  concrete effects after. No vague "bookkeeping" comments.
+- Do not hide behavior behind vague phrases. Say which function arguments are
+  required and what they are used for.
+- Keep comments close to the code they explain. Header comments should describe
+  the public contract; `.cpp` comments should clarify implementation details.
+- Do not restate simple code. Comment decisions, invariants, non-obvious timing,
+  data shape assumptions, and why a branch exists.
+- Keep comments concise. If a comment needs multiple paragraphs, first ask
+  whether the code or API should be clearer instead.
+
+Example:
+
+```cpp
+// Good: says the behavior, the setting that causes it, and the actual effects.
+// If distal learning is off (by setting `seq_permanence_inc <= 0`),
+// record newly learning cells and reset active-predict support counts.
+// Do not update distal synapses or persistence.
+
+// Bad: vague and incomplete.
+// If distal learning is off, do some bookkeeping.
+```
